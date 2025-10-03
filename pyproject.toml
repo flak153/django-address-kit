@@ -1,0 +1,72 @@
+[tool.poetry]
+name = "django-address-kit"
+version = "0.1.0"
+description = "A modern, maintained Django package for US address handling with DRF support"
+authors = ["Mohammed Ali <flak@verify4.com>"]
+license = "MIT"
+readme = "README.md"
+homepage = "https://github.com/flak153/django-address-kit"
+repository = "https://github.com/flak153/django-address-kit"
+keywords = ["django", "address", "usps", "drf", "rest-framework", "geocoding"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Framework :: Django",
+    "Framework :: Django :: 4.2",
+    "Framework :: Django :: 5.0",
+    "Framework :: Django :: 5.1",
+    "Framework :: Django :: 5.2",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+packages = [{include = "django_address_kit", from = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+django = ">=4.2"
+djangorestframework = {version = ">=3.14.0", optional = true}
+googlemaps = {version = ">=4.0.0", optional = true}
+
+[tool.poetry.group.dev.dependencies]
+pytest = ">=7.4.0"
+pytest-django = ">=4.5.0"
+pytest-cov = ">=4.1.0"
+pytest-benchmark = ">=4.0.0"
+memory-profiler = ">=0.61.0"
+djangorestframework = ">=3.14.0"
+ruff = ">=0.1.0"
+black = ">=23.0.0"
+
+[tool.poetry.extras]
+drf = ["djangorestframework"]
+geocoding = ["googlemaps"]
+all = ["djangorestframework", "googlemaps"]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "tests.settings"
+python_files = ["test_*.py"]
+addopts = "-xvs --cov=django_address_kit --cov-report=term-missing"
+markers = [
+    "performance: Performance-related tests",
+    "edge_case: Edge case and security testing",
+    "benchmark: Performance benchmark tests"
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py38"
+
+[tool.black]
+line-length = 100
+target-version = ["py38"]
