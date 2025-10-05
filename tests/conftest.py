@@ -8,11 +8,25 @@ pytest_plugins = ["pytest_django"]
 
 
 @pytest.fixture
-def state_instance(db):
+def country_instance(db):
+    """Create and return a Country instance for testing"""
+    from django_address_kit.models import Country
+
+    country, _ = Country.objects.get_or_create(
+        code="US", defaults={"name": "United States"}
+    )
+    return country
+
+
+@pytest.fixture
+def state_instance(db, country_instance):
     """Create and return a State instance for testing"""
     from django_address_kit.models import State
 
-    state, _ = State.objects.get_or_create(code="CA", defaults={"name": "California"})
+    state, _ = State.objects.get_or_create(
+        code="CA",
+        defaults={"name": "California", "country": country_instance},
+    )
     return state
 
 
@@ -33,7 +47,11 @@ def address_instance(db, locality_instance):
     from django_address_kit.models import Address
 
     address = Address.objects.create(
-        street_number="123", route="Main St", locality=locality_instance, postal_code="94102"
+        street_number="123",
+        route="Main St",
+        locality=locality_instance,
+        raw="123 Main St, San Francisco, CA 94102",
+        formatted="123 Main St\nSan Francisco, CA 94102",
     )
     return address
 
@@ -48,7 +66,6 @@ def address_instance_full(db, locality_instance):
         route="Market St",
         raw="456 Market St, Apt 101, San Francisco, CA 94103",
         locality=locality_instance,
-        postal_code="94103",
         formatted="456 Market St, Apt 101\nSan Francisco, CA 94103",
         latitude=37.7749,
         longitude=-122.4194,

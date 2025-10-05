@@ -6,6 +6,7 @@ from .models import Country, State, Locality, Address
 class CountryAdmin(admin.ModelAdmin):
     """Admin configuration for Country model."""
 
+    model = Country
     list_display = ("name", "code")
     search_fields = ("name", "code")
     list_filter = ("name",)
@@ -24,6 +25,7 @@ class StateInline(admin.TabularInline):
 class StateAdmin(admin.ModelAdmin):
     """Admin configuration for State model."""
 
+    model = State
     list_display = ("name", "code", "country")
     search_fields = ("name", "code", "country__name")
     list_filter = ("country",)
@@ -45,6 +47,7 @@ class LocalityInline(admin.TabularInline):
 class LocalityAdmin(admin.ModelAdmin):
     """Admin configuration for Locality model."""
 
+    model = Locality
     list_display = ("name", "postal_code", "state")
     search_fields = ("name", "postal_code", "state__name", "state__country__name")
     list_filter = ("state", "state__country")
@@ -66,6 +69,7 @@ class AddressInline(admin.TabularInline):
 class AddressAdmin(admin.ModelAdmin):
     """Admin configuration for Address model."""
 
+    model = Address
     list_display = ("__str__", "street_number", "route", "locality", "latitude", "longitude")
     search_fields = (
         "raw",

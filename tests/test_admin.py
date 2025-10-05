@@ -133,5 +133,5 @@ class TestAddressKitAdmin:
     )
     def test_admin_list_filters(self, admin_site, admin_class, expected_filters):
         """Test that each admin class has the expected list filters."""
-        admin_instance = admin_class(admin_site._registry[admin_class.model].model, admin_site)
+        admin_instance = admin_class(admin_class.model, admin_site)
         assert admin_instance.list_filter == expected_filters

@@ -152,3 +152,15 @@ class Address(models.Model):
                     ad["country_code"] = self.locality.state.country.code
 
         return ad
+
+    @property
+    def postal_code(self) -> str:
+        """Expose locality postal code directly on Address for convenience."""
+        return self.locality.postal_code if self.locality else ""
+
+    @postal_code.setter
+    def postal_code(self, value: str) -> None:
+        """Persist postal code assignments onto the related locality."""
+        if not self.locality:
+            raise AttributeError("Cannot set postal_code when address has no locality")
+        self.locality.postal_code = value
