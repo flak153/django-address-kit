@@ -1,137 +1,115 @@
-"""Pytest configuration and fixtures for django-address-kit tests"""
+"""Shared pytest fixtures for django-address-kit."""
+
+from __future__ import annotations
+
+import random
 
 import pytest
-from django.apps import apps
-from django.db import models
+
+from . import factories
 
 pytest_plugins = ["pytest_django"]
 
+try:  # pragma: no cover - exercised in integration tests
+    from faker import Faker  # type: ignore
+except Exception:  # pragma: no cover - fallback when Faker is unavailable
+
+    class Faker:  # type: ignore
+        """Minimal fallback Faker implementation for offline test environments."""
+
+        _COUNTRIES = [("US", "United States"), ("CA", "Canada"), ("GB", "United Kingdom")]
+        _STATES = [("CA", "California"), ("NY", "New York"), ("TX", "Texas")]
+        _CITIES = ["San Francisco", "New York", "Austin", "Seattle"]
+        _STREET_SUFFIXES = ["Street", "Avenue", "Road", "Boulevard", "Parkway"]
+
+        def __init__(self) -> None:
+            self._rand = random.Random(8675309)
+
+        def country_code(self) -> str:
+            return self._rand.choice(self._COUNTRIES)[0]
+
+        def country(self) -> str:
+            return self._rand.choice(self._COUNTRIES)[1]
+
+        def state(self) -> str:
+            return self._rand.choice(self._STATES)[1]
+
+        def state_abbr(self) -> str:
+            return self._rand.choice(self._STATES)[0]
+
+        def city(self) -> str:
+            return self._rand.choice(self._CITIES)
+
+        def postcode(self) -> str:
+            return str(self._rand.randint(10000, 99999))
+
+        def building_number(self) -> str:
+            return str(self._rand.randint(1, 999))
+
+        def street_name(self) -> str:
+            return self._rand.choice(["Market", "Mission", "Elm", "Oak", "Pine"])
+
+        def street_suffix(self) -> str:
+            return self._rand.choice(self._STREET_SUFFIXES)
+
+        def random_element(self, elements):
+            return self._rand.choice(elements)
+
+        def latitude(self) -> float:
+            return round(self._rand.uniform(-90, 90), 6)
+
+        def longitude(self) -> float:
+            return round(self._rand.uniform(-180, 180), 6)
+
+
+@pytest.fixture(scope="session")
+def faker() -> Faker:
+    """Provide a module-scoped Faker instance."""
+
+    return Faker()
+
 
 @pytest.fixture
-def country_instance(db):
-    """Create and return a Country instance for testing"""
-    from django_address_kit.models import Country
+def country_instance(db, faker: Faker):
+    """Create a reusable United States country instance."""
 
-    country, _ = Country.objects.get_or_create(
-        code="US", defaults={"name": "United States"}
-    )
-    return country
+    return factories.create_country(faker, code="US", name="United States")
 
 
 @pytest.fixture
-def state_instance(db, country_instance):
-    """Create and return a State instance for testing"""
-    from django_address_kit.models import State
+def state_instance(db, faker: Faker, country_instance):
+    """Create a reusable California state instance."""
 
-    state, _ = State.objects.get_or_create(
+    return factories.create_state(
+        faker,
+        country=country_instance,
+        name="California",
         code="CA",
-        defaults={"name": "California", "country": country_instance},
     )
-    return state
 
 
 @pytest.fixture
-def locality_instance(db, state_instance):
-    """Create and return a Locality instance for testing"""
-    from django_address_kit.models import Locality
+def locality_instance(db, faker: Faker, state_instance):
+    """Create a reusable San Francisco locality instance."""
 
-    locality, _ = Locality.objects.get_or_create(
-        name="San Francisco", state=state_instance, defaults={"postal_code": "94102"}
+    return factories.create_locality(
+        faker,
+        state=state_instance,
+        name="San Francisco",
+        postal_code="94102",
     )
-    return locality
 
 
 @pytest.fixture
-def address_instance(db, locality_instance):
-    """Create and return an Address instance for testing"""
-    from django_address_kit.models import Address
+def address_instance(db, faker: Faker, locality_instance):
+    """Create a reusable address instance for tests."""
 
-    address = Address.objects.create(
+    return factories.create_address(
+        faker,
+        locality=locality_instance,
         street_number="123",
-        route="Main St",
-        locality=locality_instance,
-        raw="123 Main St, San Francisco, CA 94102",
-        formatted="123 Main St\nSan Francisco, CA 94102",
+        street_name="Market",
+        street_type="Street",
+        unit_type="Suite",
+        unit_number="100",
     )
-    return address
-
-
-@pytest.fixture
-def address_instance_full(db, locality_instance):
-    """Create and return a fully populated Address instance"""
-    from django_address_kit.models import Address
-
-    address = Address.objects.create(
-        street_number="456",
-        route="Market St",
-        raw="456 Market St, Apt 101, San Francisco, CA 94103",
-        locality=locality_instance,
-        formatted="456 Market St, Apt 101\nSan Francisco, CA 94103",
-        latitude=37.7749,
-        longitude=-122.4194,
-    )
-    return address
-
-
-@pytest.fixture
-def test_model_class(db):
-    """Create a test Django model that uses AddressField"""
-    from django_address_kit.fields import AddressField
-
-    class TestModelWithAddress(models.Model):
-        name = models.CharField(max_length=100)
-        address = AddressField(
-            blank=True, null=True, related_name="test_models", on_delete=models.CASCADE
-        )
-
-        class Meta:
-            app_label = "tests"
-
-    return TestModelWithAddress
-
-
-@pytest.fixture
-def test_model_required_class(db):
-    """Create a test Django model with required AddressField"""
-    from django_address_kit.fields import AddressField
-
-    class TestModelRequiredAddress(models.Model):
-        name = models.CharField(max_length=100)
-        address = AddressField(
-            blank=False, null=False, related_name="required_test_models", on_delete=models.CASCADE
-        )
-
-        class Meta:
-            app_label = "tests"
-
-    return TestModelRequiredAddress
-
-
-@pytest.fixture
-def test_model_set_null_class(db):
-    """Create a test Django model with SET_NULL deletion behavior"""
-    from django_address_kit.fields import AddressField
-
-    class TestModelSetNull(models.Model):
-        name = models.CharField(max_length=100)
-        address = AddressField(
-            blank=True, null=True, related_name="set_null_test_models", on_delete=models.SET_NULL
-        )
-
-        class Meta:
-            app_label = "tests"
-
-    return TestModelSetNull
-
-
-# Commented out as pytest-django handles migrations automatically
-# @pytest.fixture(autouse=True)
-# def setup_test_models(db):
-#     """
-#     Register test models dynamically for each test.
-#     This ensures models are available during test execution.
-#     """
-#     from django.core.management import call_command
-#
-#     # Create tables for all registered models
-#     call_command("migrate", "--run-syncdb", verbosity=0)

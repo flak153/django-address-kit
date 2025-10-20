@@ -42,11 +42,14 @@ pytest-benchmark = ">=4.0.0"
 memory-profiler = ">=0.61.0"
 djangorestframework = ">=3.14.0"
 ruff = ">=0.1.0"
-black = ">=23.0.0"
+faker = ">=19.0.0"
+django-address = {path = "address", develop = true}
+python-dotenv = ">=1.0,<2.0"
 
 [tool.poetry.extras]
 drf = ["djangorestframework"]
 geocoding = ["googlemaps"]
+legacy = []
 all = ["djangorestframework", "googlemaps"]
 
 [build-system]

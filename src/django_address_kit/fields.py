@@ -25,7 +25,6 @@ class AddressField(models.ForeignKey):
     description = "An address field"
 
     def __init__(self, *args, **kwargs):
-        kwargs["to"] = "django_address_kit.Address"
-        default_on_delete = models.SET_NULL if kwargs.get("null", False) else models.CASCADE
-        kwargs["on_delete"] = kwargs.get("on_delete", default_on_delete)
+        kwargs["to"] = Address
+        kwargs["on_delete"] = kwargs.get("on_delete", models.PROTECT)
         super().__init__(*args, **kwargs)

@@ -17,6 +17,7 @@ def format_us_address(components: dict, separator: str = ", ") -> str:
             None,
             [
                 components.get("street_number", ""),
+                components.get("street_direction", ""),
                 components.get("street_name", ""),
                 components.get("street_type", ""),
             ],
@@ -25,20 +26,12 @@ def format_us_address(components: dict, separator: str = ", ") -> str:
     parts.append(street_address)
 
     # Optional unit/apartment
-    if components.get("unit"):
-        parts.append(components["unit"])
+    unit_fragment = _unit_fragment(components)
+    if unit_fragment:
+        parts.append(unit_fragment)
 
     # City, state, zipcode
-    location = " ".join(
-        filter(
-            None,
-            [
-                components.get("city", ""),
-                components.get("state", ""),
-                components.get("zipcode", ""),
-            ],
-        )
-    )
+    location = _compose_location_line(components)
 
     if location:
         parts.append(location)
@@ -61,23 +54,14 @@ def format_multiline_address(components: dict) -> list:
             None,
             [
                 components.get("street_number", ""),
+                components.get("street_direction", ""),
                 components.get("street_name", ""),
                 components.get("street_type", ""),
             ],
         )
     )
 
-    second_line = ", ".join(
-        filter(
-            None,
-            [
-                components.get("city", ""),
-                " ".join(
-                    filter(None, [components.get("state", ""), components.get("zipcode", "")])
-                ),
-            ],
-        )
-    )
+    second_line = _compose_location_line(components)
 
     return [first_line, second_line]
 
@@ -92,8 +76,14 @@ def format_short_address(components: dict) -> str:
     Returns:
         str: Short address string
     """
+    primary = " ".join(
+        filter(
+            None,
+            [components.get("street_name", ""), components.get("street_type", "")],
+        )
+    )
     parts = [
-        components.get("street_name", ""),
+        primary,
         components.get("city", ""),
         components.get("state", ""),
     ]
@@ -134,3 +124,30 @@ def get_address_display_string(components: dict, style: str = "default") -> str:
 
     else:
         return format_us_address(components)
+
+
+def _unit_fragment(components: dict) -> str:
+    """Return a human-readable unit fragment from component data."""
+
+    if components.get("unit"):
+        return components["unit"]
+
+    unit_type = components.get("unit_type", "")
+    unit_number = components.get("unit_number", "")
+
+    fragment = " ".join(filter(None, [unit_type, unit_number]))
+    return fragment
+
+
+def _compose_location_line(components: dict) -> str:
+    """Format the city/state/ZIP fragment."""
+
+    city = components.get("city", "")
+    state = components.get("state", "")
+    zipcode = components.get("zipcode", "")
+    state_zip = " ".join(filter(None, [state, zipcode]))
+
+    if city and state_zip:
+        return f"{city}, {state_zip}"
+
+    return ", ".join(filter(None, [city, state_zip]))

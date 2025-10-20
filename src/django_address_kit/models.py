@@ -8,6 +8,8 @@ Models:
 - Address: Full address with optional geocoding support
 """
 
+from __future__ import annotations
+
 from typing import Any
 
 from django.core.exceptions import ValidationError
@@ -31,25 +33,45 @@ class Country(models.Model):
 class State(models.Model):
     """Represents a state/province with country relationship."""
 
-    name = models.CharField(max_length=165, blank=True)
-    code = models.CharField(max_length=8, blank=True)
+    name = models.CharField(max_length=165)
+    code = models.CharField(max_length=8)
     country = models.ForeignKey(Country, on_delete=models.CASCADE, related_name="states")
 
     class Meta:
         unique_together = ("name", "country")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("code", "country"),
+                name="unique_state_code_per_country",
+            )
+        ]
         ordering = ("country", "name")
 
     def __str__(self) -> str:
-        txt = self.to_str()
+        parts = [self.to_str()]
         country = str(self.country)
-        if country and txt:
-            txt += ", "
-        txt += country
-        return txt
+        if country:
+            parts.append(country)
+        return ", ".join(filter(None, parts))
 
     def to_str(self) -> str:
         """Return state name or code."""
-        return f"{self.name or self.code}"
+        return f"{self.code or self.name}"
+
+    def clean(self) -> None:
+        """Normalize and validate state data."""
+        self.code = (self.code or "").strip().upper()
+        self.name = (self.name or "").strip()
+
+        if not self.code:
+            raise ValidationError({"code": "State code cannot be blank."})
+        if not self.name:
+            raise ValidationError({"name": "State name cannot be blank."})
+
+    def save(self, *args, **kwargs):
+        """Persist the state after normalization and validation."""
+        self.full_clean()
+        return super().save(*args, **kwargs)
 
 
 class Locality(models.Model):
@@ -94,6 +116,13 @@ class Address(models.Model):
 
     street_number = models.CharField(max_length=20, blank=True)
     route = models.CharField(max_length=100, blank=True)
+    street_name = models.CharField(max_length=100, blank=True)
+    street_type = models.CharField(max_length=20, blank=True)
+    street_direction = models.CharField(max_length=2, blank=True)
+    unit_type = models.CharField(max_length=20, blank=True)
+    unit_number = models.CharField(max_length=20, blank=True)
+    is_po_box = models.BooleanField(default=False)
+    is_military = models.BooleanField(default=False)
     locality = models.ForeignKey(
         Locality,
         on_delete=models.CASCADE,
@@ -114,16 +143,23 @@ class Address(models.Model):
         if self.formatted:
             return self.formatted
 
-        if self.locality:
-            parts = []
-            if self.street_number:
-                parts.append(self.street_number)
-            if self.route:
-                parts.append(self.route)
-            parts.append(str(self.locality))
-            return ", ".join(filter(None, parts)) if parts else self.raw
+        primary = " ".join(
+            filter(
+                None,
+                [
+                    self.street_number,
+                    self.street_direction,
+                    self.street_name or self.route,
+                    self.street_type,
+                ],
+            )
+        )
+        unit = " ".join(filter(None, [self.unit_type, self.unit_number]))
+        locality_display = str(self.locality) if self.locality else ""
 
-        return self.raw
+        parts = [primary, unit, locality_display]
+        label = ", ".join(filter(None, [part.strip() for part in parts if part]))
+        return label or self.raw
 
     def clean(self) -> None:
         """Validate that raw field is not blank."""
@@ -132,13 +168,20 @@ class Address(models.Model):
 
     def as_dict(self) -> dict[str, Any]:
         """Return address data as a dictionary."""
-        ad = {
+        ad: dict[str, Any] = {
             "street_number": self.street_number,
+            "street_name": self.street_name or self.route,
             "route": self.route,
+            "street_type": self.street_type,
+            "street_direction": self.street_direction,
+            "unit_type": self.unit_type,
+            "unit_number": self.unit_number,
             "raw": self.raw,
             "formatted": self.formatted,
-            "latitude": self.latitude if self.latitude else "",
-            "longitude": self.longitude if self.longitude else "",
+            "latitude": self.latitude if self.latitude is not None else "",
+            "longitude": self.longitude if self.longitude is not None else "",
+            "is_po_box": self.is_po_box,
+            "is_military": self.is_military,
         }
 
         if self.locality:
@@ -164,3 +207,85 @@ class Address(models.Model):
         if not self.locality:
             raise AttributeError("Cannot set postal_code when address has no locality")
         self.locality.postal_code = value
+
+    def save(self, *args, **kwargs):
+        """Normalize component fields before saving."""
+        self._synchronize_street_fields()
+        self.raw = (self.raw or "").strip()
+        self.formatted = (self.formatted or "").strip()
+        self._auto_detect_po_box()
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def _synchronize_street_fields(self) -> None:
+        """Keep legacy `route` field in sync with `street_name`."""
+        street = (self.street_name or "").strip()
+        route = (self.route or "").strip()
+
+        self.street_number = (self.street_number or "").strip()
+
+        if street and not route:
+            self.route = street
+        elif route and not street:
+            self.street_name = route
+        else:
+            self.street_name = street
+            self.route = route
+
+        self.street_type = (self.street_type or "").strip()
+        self.street_direction = (self.street_direction or "").strip().upper()
+        self.unit_type = (self.unit_type or "").strip()
+        self.unit_number = (self.unit_number or "").strip()
+
+    def _auto_detect_po_box(self) -> None:
+        """Automatically flag PO Box addresses when not set explicitly."""
+        if self.is_po_box:
+            return
+
+        hints = " ".join(
+            filter(
+                None,
+                [
+                    self.street_number,
+                    self.street_name,
+                    self.raw,
+                ],
+            )
+        )
+        normalized = hints.lower()
+        self.is_po_box = "po box" in normalized or "post office box" in normalized
+
+
+class AddressSource(models.Model):
+    """Captured provider payloads used to build an Address."""
+
+    address = models.ForeignKey(Address, on_delete=models.CASCADE, related_name="sources")
+    provider = models.CharField(max_length=40)
+    version = models.PositiveSmallIntegerField(default=1)
+    raw_payload = models.JSONField(default=dict)
+    normalized_components = models.JSONField(default=dict, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("address", "provider", "version")
+        ordering = ("-created_at", "-version")
+
+    def __str__(self) -> str:
+        return f"{self.provider} source for address {self.address_id}"
+
+
+class AddressIdentifier(models.Model):
+    """Provider-specific identifiers (place IDs, etc.) attached to an address."""
+
+    address = models.ForeignKey(Address, on_delete=models.CASCADE, related_name="identifiers")
+    provider = models.CharField(max_length=40)
+    identifier = models.CharField(max_length=160)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("provider", "identifier")
+        ordering = ("provider", "identifier")
+
+    def __str__(self) -> str:
+        return f"{self.provider}:{self.identifier}"

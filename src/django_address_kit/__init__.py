@@ -10,9 +10,12 @@ default_app_config = "django_address_kit.apps.DjangoAddressKitConfig"
 __all__ = [
     "AddressField",
     "Address",
+    "AddressSource",
+    "AddressIdentifier",
     "Country",
     "Locality",
     "State",
+    "ingest_legacy_address",
 ]
 
 
@@ -26,6 +29,18 @@ def __getattr__(name):
         from .models import Address
 
         return Address
+    elif name == "AddressSource":
+        from .models import AddressSource
+
+        return AddressSource
+    elif name == "AddressIdentifier":
+        from .models import AddressIdentifier
+
+        return AddressIdentifier
+    elif name == "ingest_legacy_address":
+        from .ingest import ingest_legacy_address
+
+        return ingest_legacy_address
     elif name == "Country":
         from .models import Country
 
